@@ -3,8 +3,8 @@
             [clojure.string :as str]
             [muuntaja.core :as m]))
 
-(def db (-> (slurp "./resources/rushing.json")
-            (m/decode "application/json")))
+(def db (->> (slurp "./resources/rushing.json")
+             (m/decode "application/json")))
 
 ;; Real DB
 (def node (xt/start-node {}))
@@ -44,3 +44,18 @@
           :where [[e :player/name n]
                   [(re-find re-name n)]]}
         (re-pattern (str "(?i)" name))))
+
+(defn rush-pag [curr-page per-page]
+  (let [limit per-page
+        offset (* per-page (dec curr-page))]
+    (->> (xt/q (xt/db node)
+               {:find '[name (pull e [*])]
+                :where '[[e :player/name name]
+                         [e :xt/id id]]
+                :order-by '[[name :asc]]
+                :limit limit
+                :offset offset})
+         (map (fn [[_name e]] e)))))
+
+(rush-pag 1 10)
+
