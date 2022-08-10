@@ -1,61 +1,45 @@
 (ns nfl.xtdb
-  (:require [xtdb.api :as xt]
-            [clojure.string :as str]
-            [muuntaja.core :as m]))
+  (:require [xtdb.api :as xt]))
 
-(def db (->> (slurp "./resources/rushing.json")
-             (m/decode "application/json")))
-
-;; Real DB
 (def node (xt/start-node {}))
 
+(defn- where-find-player-name-q [name]
+  (let [re (re-pattern (str "(?i)" name))]
+    ['[e :player/name n]
+     [(list 're-find re 'n)]]))
 
-(.close node) ;; kill the node if you want to
-
-
-(defn json->xtdb [rush]
-  {:xt/id (java.util.UUID/randomUUID)
-   :player/name (:Player rush)
-   :player/pos (:Pos rush)
-   :player/team (:Team rush)
-   :rush/:1st (:1st rush)
-   :rush/:1st% (:1st rush)
-   :rush/:20+ (:20+ rush)
-   :rush/:40+ (:40+ rush)
-   :rush/:att (:Att rush)
-   :rush/:att-g (:Att/G rush)
-   :rush/:td (:TD rush)
-   :rush/avg (:Avg rush)
-   :rush/fum (:FUM rush)
-   :rush/lng (:Lng rush)
-   :rush/touchdown? (str/includes? (:Lng rush) "T")
-   :rush/yds (:Yds rush)
-   :rush/yds-g (:Yds/G rush)})
-
-(def players (map (fn [json] [::xt/put (json->xtdb json)]) db))
-
-
-(xt/submit-tx node players) ;; seed the database
+(where-find-player-name-q "Luc")
 
 (defn find-by-player-name [name]
   (xt/q (xt/db node)
-        '{:find [(pull e [*])]
-          :in [re-name]
-          :where [[e :player/name n]
-                  [(re-find re-name n)]]}
-        (re-pattern (str "(?i)" name))))
+        {:find '[(pull e [*])]
+         :where (where-find-player-name-q name)}))
 
-(defn rush-pag [curr-page per-page]
+(find-by-player-name "Lu")
+
+
+(defn- rush-paginated-q [curr-page per-page]
   (let [limit per-page
         offset (* per-page (dec curr-page))]
-    (->> (xt/q (xt/db node)
-               {:find '[name (pull e [*])]
-                :where '[[e :player/name name]
-                         [e :xt/id id]]
-                :order-by '[[name :asc]]
-                :limit limit
-                :offset offset})
-         (map (fn [[_name e]] e)))))
+    {:find '[n (pull e [*])]
+     :where '[[e :player/name n]
+              [e :xt/id id]]
+     :order-by '[[n :asc]]
+     :limit limit
+     :offset offset}))
 
-(rush-pag 1 10)
+(defn do-q-pag [q]
+  (->> (xt/q (xt/db node) q)
+       (map (fn [[_name e]] e))))
 
+(defn rush-pag [curr-page per-page]
+  (->>  (rush-paginated-q curr-page per-page)
+        (do-q-pag)))
+
+(defn xt-where-q [q where-q]
+  (update-in q [:where] #(into [] (concat % where-q))))
+
+(defn find-by-player-name-pag [name curr-page per-page]
+  (-> (rush-paginated-q curr-page per-page)
+      (xt-where-q (where-find-player-name-q name))
+      (do-q-pag)))
