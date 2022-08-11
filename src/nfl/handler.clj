@@ -14,14 +14,22 @@
   ([req name default] (-> req (get :query-params) (get name default))))
 
 (defn search-by [req]
-  (if-let [name (get-query-params req "name")]
-    (response (db/find-by-player-name name))
-    (response {:error "provide a query like ?name=Lucas"})))
+  (let [name (get-query-params req "name")
+        page (get-query-params req "page")
+        per-page (get-query-params req "per-page")]
+    (cond
+      (and name page per-page) (response (db/find-by-player-name-pag name (read-string page) (read-string per-page)))
+      name (response (db/find-by-player-name name))
+      :else (response {:error "provide a query like ?name=Lucas"}))))
 
 (defn rushes [req]
-  (let [page (read-string (get-query-params req "page" "1"))
-        per-page (read-string  (get-query-params req "per-page" "25"))]
-    (response (db/rush-pag page per-page))))
+  (let [page (get-query-params req "page")
+        per-page (get-query-params req "per-page")]
+    (if (and page per-page) 
+      (response (db/rushes-pag (read-string page) (read-string per-page)))
+      (response (db/rushes)))))
+
+(db/rushes)
 
 (def routes [["/search-by" search-by]
              ["/rushes"  rushes]])
