@@ -26,7 +26,7 @@
 (defn query-first [q]
   (->> (xt/q (xt/db node) q) (map first)))
 
-(defn rushes [] 
+(defn rushes []
   (query-first rush-ord-by-player-name))
 
 (defn rushes-pag [curr-page per-page]
@@ -40,3 +40,6 @@
   (-> (add-pag rush-ord-by-player-name curr-page per-page)
       (xt-where-q (where-find-player-name-q name))
       (query-first)))
+
+(first (map first (xt/q (xt/db node) {:find '[(pull e [*])]
+                                      :where '[[e :xt/id n]]})))

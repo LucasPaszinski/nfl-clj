@@ -6,41 +6,81 @@
             [reitit.ring.middleware.muuntaja :as muuntaja]
             [reitit.ring.middleware.exception :as exception]
             [reitit.ring.middleware.parameters :as parameters]
-            [nfl.xtdb :as db])
+            [nfl.xtdb :as db]
+            [clojure.spec.alpha :as s])
   (:gen-class))
 
 (defn get-query-params
   ([req name] (get-query-params req name nil))
-  ([req name default] (-> req (get :query-params) (get name default))))
+  ([req name default] (-> req (get :params) (get name default))))
+
+(s/def ::page string?)
+(s/def ::per-page string?)
+(s/def ::name string?)
+
+(s/def :name/query-params (s/keys :req-un [::name]))
+(s/def :name-pag/query-params (s/keys :req-un [::name ::page ::per-page]))
+(s/def :pag/query-params (s/keys :req-un [::page ::per-page]))
+
+(s/def :search-by/req (s/or :pag (s/keys :req-un [:name-pag/query-params])
+                            :full (s/keys :req-un [:name/query-params])))
+
+;; (s/fdef search-by
+;;   :args :search-by/req
+;;   :ret)
+
 
 (defn search-by [req]
-  (let [name (get-query-params req "name")
-        page (get-query-params req "page")
-        per-page (get-query-params req "per-page")]
+  (let [name (get-query-params req :name)
+        page (get-query-params req :page)
+        per-page (get-query-params req :per-page)]
+        (clojure.pprint/pprint [req name (:params page) page per-page])
     (cond
       (and name page per-page) (response (db/find-by-player-name-pag name (read-string page) (read-string per-page)))
       name (response (db/find-by-player-name name))
       :else (response {:error "provide a query like ?name=Lucas"}))))
 
+(s/fdef rushes
+  :args (s/or :partial map?
+              :complete (s/keys :req-un [:pag/query-params])))
 (defn rushes [req]
-  (let [page (get-query-params req "page")
-        per-page (get-query-params req "per-page")]
-    (if (and page per-page) 
+  (let [page (get-query-params req :page)
+        per-page (get-query-params req :per-page)]
+    (clojure.pprint/pprint [req (:params page) page per-page])
+    (if (and page per-page)
       (response (db/rushes-pag (read-string page) (read-string per-page)))
       (response (db/rushes)))))
 
 (db/rushes)
 
-(def routes [["/search-by" search-by]
-             ["/rushes"  rushes]])
+(defn keyword-map [s-map]
+  (into {} (map (fn [[k v]] [(keyword k) v])) s-map))
+
+(defn middleware-keyword-query-params [handler & _]
+  (fn [req]
+    (clojure.pprint/pprint req)
+    (handler (assoc req :query-params (keyword-map (:query-params req))))))
+
+
+(defn middleware-keyword-params [handler & _]
+  (fn [req]
+    (handler (assoc req :params (keyword-map (:params req))))))
 
 (def app
-  (-> (rr/router routes {:data {:muuntaja m/instance
-                                :middleware [parameters/parameters-middleware
-                                             muuntaja/format-response-middleware
-                                             exception/exception-middleware
-                                             muuntaja/format-request-middleware]}})
+  (-> (rr/router [["/search-by" search-by ]
+                  ["/rushes"  rushes]]
+                 {:data {:muuntaja m/instance
+                         :middleware [
+                                      parameters/parameters-middleware
+                                      muuntaja/format-response-middleware
+                                      exception/exception-middleware
+                                      muuntaja/format-request-middleware
+                                      middleware-keyword-query-params
+                                      middleware-keyword-params
+                                      ]}})
       (rr/ring-handler)))
+
+
 
 (defn start [] (jetty/run-jetty #'app {:port 3000 :join? false}))
 
@@ -48,8 +88,10 @@
 
 (app {:request-method :get
       :uri "/search-by"
-      :query-params {:name "Lu"}})
+      :params {"name" "Lu" "page" "1" "per-page" "25"}})
 
 (app {:request-method :get
       :uri "/rushes"
-      :query-params {:page 1 :per-page 25}})
+      :params {:page 1 :per-page 25}})
+
+(get-query-params {:params {:name "Hey" :page 1 :per-page 25}} :name)
