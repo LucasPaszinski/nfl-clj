@@ -63,8 +63,6 @@
                                       middleware-keyword-params]}})
       (rr/ring-handler)))
 
-
-
 (defn start [] (jetty/run-jetty #'app {:port 3000 :join? false}))
 
 (start)

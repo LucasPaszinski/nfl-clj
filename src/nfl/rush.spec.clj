@@ -1,6 +1,6 @@
 (ns nfl.rush.spec
-  (:require [clojure.spec :as s]
-            [clojure.spec.gen :as g]))
+  (:require [clojure.spec.alpha :as s]
+            [clojure.spec.gen.alpha :as g]))
 
 (s/def :player/name string?)
 (s/def :player/pos (s/and string? #(>= 2 (count %))))
@@ -36,6 +36,8 @@
                             :rush/yds
                             :rush/yds-g]))
 
+(s/def ::rushes (s/coll-of ::rush :distinct true))
+
 (def rush {:rush/first-percent 0,
            :rush/avg 3.6,
            :rush/td 0,
@@ -56,6 +58,8 @@
 
 (s/conform ::rush rush)
 (s/explain ::rush rush)
+
+(s/conform ::rushes [rush])
 
 
 (g/sample (s/gen ::rush))
