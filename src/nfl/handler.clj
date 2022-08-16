@@ -17,66 +17,29 @@
 (s/def ::page string?)
 (s/def ::per-page string?)
 (s/def ::name string?)
-
-(s/def :name/query-params (s/keys :req-un [::name]))
-(s/def :name-pag/query-params (s/keys :req-un [::name ::page ::per-page]))
-(s/def :pag/query-params (s/keys :req-un [::page ::per-page]))
-
-(s/def :search-by/req (s/or :pag (s/keys :req-un [:name-pag/query-params])
-                            :full (s/keys :req-un [:name/query-params])))
-
-;; (s/fdef search-by
-;;   :args :search-by/req
-;;   :ret)
-
-
-(defn search-by [req]
-  (let [name (get-query-params req :name)
-        page (get-query-params req :page)
-        per-page (get-query-params req :per-page)]
-    (cond
-      (and name page per-page) (response (db/find-by-player-name-pag name (read-string page) (read-string per-page)))
-      name (response (db/find-by-player-name name))
-      :else (response {:error "provide a query like ?name=Lucas"}))))
-
-(s/fdef rushes
-  :args (s/or :partial map?
-              :complete (s/keys :req-un [:pag/query-params])))
-(defn rushes [req]
-  (let [page (get-query-params req :page)
-        per-page (get-query-params req :per-page)]
-    (clojure.pprint/pprint [req (:params page) page per-page])
-    (if (and page per-page)
-      (response (db/rushes-pag (read-string page) (read-string per-page)))
-      (response (db/rushes)))))
-
-(db/rushes)
+(s/def ::sort-col string?)
+(s/def ::sort-ord string?)
+(s/def ::query (s/keys :opt-un [::name ::page ::per-page ::sort-col ::sort-ord]))
 
 (defn ->sort-col [sorter]
-  (cond
-    (= sorter "yds") :rush/yds
-    (= sorter "lng") :rush/lng
-    (= sorter "td") :rush/td
-    :else :player/name))
+  (cond (= sorter "yds") :rush/yds
+        (= sorter "yds") :rush/yds
+        (= sorter "lng") :rush/lng
+        (= sorter "td") :rush/td
+        :else :player/name))
 
 (defn ->sort-ord [ord]
-  (if (= ord "asc") 
-    :asc 
-    :desc))
+  (if (= ord "asc") :asc :desc))
+
+(s/fdef query
+  :args (s/keys :req-un [::query]))
 
 (defn query [req]
-  (let [name (get-query-params req :name)
-        sort-ord (get-query-params req :sort-ord)
-        sort-col (get-query-params req :sort-col)
-        page (get-query-params req :page)
-        per-page (get-query-params req :per-page)]
-    (response (db/query :name name
-                        :curr-page (Integer/parseInt page)
-                        :per-page (Integer/parseInt per-page)
-                        :sort-ord (->sort-ord sort-ord)
-                        :sort-col (->sort-col sort-col)))))
-
-
+  (response (db/query :name (get-query-params req :name)
+                      :curr-page (Integer/parseInt (get-query-params req :page))
+                      :per-page (Integer/parseInt (get-query-params req :per-page))
+                      :sort-ord (->sort-ord (get-query-params req :sort-ord))
+                      :sort-col (->sort-col (get-query-params req :sort-col)))))
 
 (defn keyword-map [s-map]
   (into {} (map (fn [[k v]] [(keyword k) v])) s-map))
@@ -85,15 +48,12 @@
   (fn [req]
     (handler (assoc req :query-params (keyword-map (:query-params req))))))
 
-
 (defn middleware-keyword-params [handler & _]
   (fn [req]
     (handler (assoc req :params (keyword-map (:params req))))))
 
 (def app
-  (-> (rr/router [["/search-by" search-by]
-                  ["/rushes"  rushes]
-                  ["/query" query]]
+  (-> (rr/router [["/query" query]]
                  {:data {:muuntaja m/instance
                          :middleware [parameters/parameters-middleware
                                       muuntaja/format-response-middleware
