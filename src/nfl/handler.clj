@@ -66,13 +66,3 @@
 (defn start [] (jetty/run-jetty #'app {:port 3000 :join? false}))
 
 (start)
-
-(app {:request-method :get
-      :uri "/search-by"
-      :params {"name" "Lu" "page" "1" "per-page" "25"}})
-
-(app {:request-method :get
-      :uri "/rushes"
-      :params {:page 1 :per-page 25}})
-
-(get-query-params {:params {:name "Hey" :page 1 :per-page 25}} :name)

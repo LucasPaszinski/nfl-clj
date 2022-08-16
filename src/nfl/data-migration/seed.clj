@@ -4,9 +4,10 @@
             [xtdb.api :as xt]
             [clojure.string :as str]))
 
-(defmacro if-not-int?->to-int [val] `(if (int? ~val) 
-                                        ~val 
-                                        (Integer/parseInt (str/replace ~val #"[^\d+]" ""))))
+(defmacro if-not-int?->to-int [val]
+  `(if (int? ~val)
+     ~val
+     (Integer/parseInt (str/replace ~val #"[^\d+]" ""))))
 
 (defn json->xtdb [rush]
   {:xt/id (java.util.UUID/randomUUID)
@@ -34,8 +35,3 @@
        (xt/submit-tx db/node)))
 
 (seed-db)
-
-
-(macroexpand '(if-not-num?->to-num 13))
-
-(if-not-int?->to-int "12,00")

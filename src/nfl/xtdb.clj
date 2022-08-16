@@ -11,7 +11,6 @@
 (defn- xt-q-replace [q key value]
   (update-in q [key] (fn [_] value)))
 
-
 (defn- add-pag [q curr-page per-page]
   (let [limit per-page
         offset (* per-page (dec curr-page))]
