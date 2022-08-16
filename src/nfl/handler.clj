@@ -34,7 +34,6 @@
   (let [name (get-query-params req :name)
         page (get-query-params req :page)
         per-page (get-query-params req :per-page)]
-        (clojure.pprint/pprint [req name (:params page) page per-page])
     (cond
       (and name page per-page) (response (db/find-by-player-name-pag name (read-string page) (read-string per-page)))
       name (response (db/find-by-player-name name))
@@ -53,12 +52,37 @@
 
 (db/rushes)
 
+(defn ->sort-col [sorter]
+  (cond
+    (= sorter "yds") :rush/yds
+    (= sorter "lng") :rush/lng
+    (= sorter "td") :rush/td
+    :else :player/name))
+
+(defn ->sort-ord [ord]
+  (if (= ord "asc") 
+    :asc 
+    :desc))
+
+(defn query [req]
+  (let [name (get-query-params req :name)
+        sort-ord (get-query-params req :sort-ord)
+        sort-col (get-query-params req :sort-col)
+        page (get-query-params req :page)
+        per-page (get-query-params req :per-page)]
+    (response (db/query :name name
+                        :curr-page (Integer/parseInt page)
+                        :per-page (Integer/parseInt per-page)
+                        :sort-ord (->sort-ord sort-ord)
+                        :sort-col (->sort-col sort-col)))))
+
+
+
 (defn keyword-map [s-map]
   (into {} (map (fn [[k v]] [(keyword k) v])) s-map))
 
 (defn middleware-keyword-query-params [handler & _]
   (fn [req]
-    (clojure.pprint/pprint req)
     (handler (assoc req :query-params (keyword-map (:query-params req))))))
 
 
@@ -67,17 +91,16 @@
     (handler (assoc req :params (keyword-map (:params req))))))
 
 (def app
-  (-> (rr/router [["/search-by" search-by ]
-                  ["/rushes"  rushes]]
+  (-> (rr/router [["/search-by" search-by]
+                  ["/rushes"  rushes]
+                  ["/query" query]]
                  {:data {:muuntaja m/instance
-                         :middleware [
-                                      parameters/parameters-middleware
+                         :middleware [parameters/parameters-middleware
                                       muuntaja/format-response-middleware
                                       exception/exception-middleware
                                       muuntaja/format-request-middleware
                                       middleware-keyword-query-params
-                                      middleware-keyword-params
-                                      ]}})
+                                      middleware-keyword-params]}})
       (rr/ring-handler)))
 
 

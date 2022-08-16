@@ -1,22 +1,15 @@
 (ns nfl.xtdb
-  (:require [xtdb.api :as xt]))
+  (:require [xtdb.api :as xt]
+            [clojure.pprint :as p]))
 
 (def node (xt/start-node {}))
 
-(def rush-ord-by-player-name
-  {:find '[(pull e [*]) n]
-   :where '[[e :player/name n]]
-   :order-by '[[n :asc]]})
+(defn xt-q-append [q key statement]
+  (update-in q [key] #(into [] (concat % statement))))
 
-(defn- where-find-player-name-q [name]
-  (let [re (re-pattern (str "(?i)" name))]
-    ['[e :player/name n]
-     [(list 're-find re 'n)]]))
+(defn xt-q-replace [q key value]
+  (update-in q [key] (fn [_] value)))
 
-(defn find-by-player-name [name]
-  (xt/q (xt/db node)
-        {:find '[(pull e [*])]
-         :where (where-find-player-name-q name)}))
 
 (defn- add-pag [q curr-page per-page]
   (let [limit per-page
@@ -26,20 +19,22 @@
 (defn query-first [q]
   (->> (xt/q (xt/db node) q) (map first)))
 
-(defn rushes []
-  (query-first rush-ord-by-player-name))
+(defn filter-by-name [q name]
+  (let [re (re-pattern (str "(?i)" name))]
+    (xt-q-append q :where ['[e :player/name n]
+                           [(list 're-find re 'n)]])))
 
-(defn rushes-pag [curr-page per-page]
-  (->>  (add-pag rush-ord-by-player-name curr-page per-page)
-        (query-first)))
+(defn sort-by [q sort-col sort-ord]
+  (-> (xt-q-append q :find ['s])
+      (xt-q-append :where [['e (or sort-col :player/name) 's]])
+      (xt-q-replace :order-by [['s (or sort-ord :asc)]])))
 
-(defn xt-where-q [q where-q]
-  (update-in q [:where] #(into [] (concat % where-q))))
+(sort-by '{:find [(pull e [*])] :where [[e :player/name n]]} :player/name :asc)
 
-(defn find-by-player-name-pag [name curr-page per-page]
-  (-> (add-pag rush-ord-by-player-name curr-page per-page)
-      (xt-where-q (where-find-player-name-q name))
-      (query-first)))
-
-(first (map first (xt/q (xt/db node) {:find '[(pull e [*])]
-                                      :where '[[e :xt/id n]]})))
+(defn query [& {:keys [name curr-page per-page sort-col sort-ord]}]
+  (let [q '{:find [(pull e [*])] :where [[e :player/name n]]}
+        q (sort-by q sort-col sort-ord)
+        q (if name (filter-by-name q name) q)
+        q (if (and curr-page per-page) (add-pag q curr-page per-page) q)]
+    (p/pprint q)
+    (query-first q)))
